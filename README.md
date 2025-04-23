@@ -1,20 +1,6 @@
 # GridWorld RL Comparison
 Author: Bagautdin Nukhkadiev
 
-
-## Overview
-We implement and compare:
-- **Exact methods**: Value Iteration, Iterative Policy Evaluation (finite-horizon & discounted)
-- **Sample-based evaluation**: Monte Carlo, TD(0)
-- **Control**: Q-learning, SARSA, Double Q-learning
-- **Actor-Critic**: Tabular AC with softmax policy
-
-We investigate:
-1. **Convergence rates** of dynamic programming vs. sample-based.
-2. **Extreme MDPs** to illustrate backpropagation, robustness, overestimation bias.
-3. **Actor-Critic vs. direct Bellman-optimal methods**.
-4. **Hyperparameter search** in a custom 4×4 grid with special rewards.
-
 ## Installation
 ```bash
 pip install -r requirements.txt
