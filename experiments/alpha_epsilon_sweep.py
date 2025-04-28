@@ -62,8 +62,8 @@ def main():
     plot_sweep(epsilon_res, "Effect of Initial ε", 'cum_reward')
 
     # 3) Convergence (δ) comparison for best hyperparams
-    best_alpha = 0.1
-    best_eps0  = 0.3
+    best_alpha = 0.01
+    best_eps0  = 0.05
     eps_sched = lambda t: max(0.01, best_eps0*np.exp(-t/(episodes/5)))
     _, _, deltas_best, _ = q_learning(env, alpha=best_alpha,
                                       epsilon_schedule=eps_sched, episodes=episodes)
