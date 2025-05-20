@@ -5,7 +5,7 @@ def epsilon_greedy(Q, state, epsilon):
         return np.random.randint(Q.shape[-1])
     return np.argmax(Q[state])
 
-def sarsa(env, alpha=0.1, epsilon=0.1, gamma=None, episodes=5000, max_steps=100):
+def sarsa(env, alpha=0.1, epsilon=0.1, gamma=None, episodes=10_000, max_steps=1000):
     gamma = gamma if gamma is not None else env.gamma
     Q = np.zeros(env.shape + (env.nA,))
     deltas = []

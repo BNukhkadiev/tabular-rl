@@ -24,35 +24,24 @@ The manually implemented simple gridworld environment used in the experiments lo
 Empirically verify the convergence rates of iterative methods that rely on known transition probabilities, comparing them to the convergence speed of sample-based algorithms.
 We conducted an empirical comparison of convergence rates across different value evaluation methods:
 
-<p float="left"> <img src="images/iterative_vs_sample_based.png" alt="Convergence Comparison" width="600"/> </p>
+<p float="left"> <img src="images/vi_ipe_convergence.png" alt="Convergence Comparison" width="400"/> </p>
+
+- Value Iteration shows **much faster convergence** than IPE. This is expected because VI applies the **Bellman optimality operator**, greedily improving values, while IPE only evaluates a fixed policy using the **Bellman expectation operator**.
+- On a logarithmic scale, VI reduces the max delta by several orders of magnitude within just a few iterations, whereas IPE converges gradually.
+
+
+<p float="left"> <img src="images/iterative_vs_sample_based.png" alt="Convergence Comparison" width="500"/> </p>
+
 Key Observations:
 
-Value Iteration and Iterative Policy Evaluation — methods that rely on known transition probabilities — converge very quickly.
+We observed that **Value Iteration** and **Iterative Policy Evaluation** — both relying on known transition probabilities — converge significantly faster than sample-based alternatives. In particular, **Value Iteration** reaches near-zero Bellman error within as few as 5–10 iterations, demonstrating its efficiency and precision in computing optimal value functions. **Iterative Policy Evaluation**, while slightly slower, still exhibits steady and reliable convergence.
 
-Value Iteration reaches near-zero Bellman error within just a few iterations (~5–10).
+In contrast, **sample-based methods** such as **Monte Carlo Evaluation**, **TD(0) Evaluation**, **First-Visit Monte Carlo Q Evaluation**, and **Finite-Horizon Evaluation** showed substantially slower convergence. These methods tend to plateau at higher Bellman error values and fail to approach the accuracy of model-based methods, even after thousands of episodes. **Monte Carlo** and **TD(0)** evaluation displayed high variance — an inherent characteristic of these estimators — while the finite-horizon and first-visit approaches similarly struggled to match the convergence behavior of their model-based counterparts.
 
-Iterative Policy Evaluation is slower than Value Iteration but still converges steadily.
-
-Sample-Based Methods such as:
-
-Monte Carlo Evaluation
-
-Sample-based TD(0) Evaluation
-
-First-Visit Monte Carlo Q Evaluation
-
-Finite-Horizon Evaluation
-
-show significantly slower convergence.
-
-Their errors plateau at higher values and do not decrease significantly even after many episodes.
-
-Monte Carlo and TD(0) evaluation exhibit large variance, typical for sample-based estimators.
-
-First-Visit MC and Finite-Horizon approaches similarly fail to match the precision of model-based approaches.
-
+These results empirically confirm that when the model is known, leveraging the transition dynamics offers a clear advantage in convergence speed and precision over sampling-based learning techniques.
 
 ## b)
+
 | Concept              | Finite-Time MDP                                       | Discounted MDP                                               |
 |----------------------|--------------------------------------------------------|---------------------------------------------------------------|
 | Time Horizon         | Fixed, e.g. T = 1000 steps                               | Infinite (potentially infinite steps into the future)         |
@@ -60,6 +49,18 @@ First-Visit MC and Finite-Horizon approaches similarly fail to match the precisi
 | Discounting          | No discounting; horizon defines importance             | Uses gamma in [0, 1) to weigh future rewards less             |
 | Optimal Policy       | Non-stationary (depends on remaining time)            | Stationary (same at every timestep for given state)           |
 | Typical Use Case     | Games, deadline-based planning, short-term decisions  | Navigation, maintenance, inventory — long-term decisions      |
+
+
+**Reward Design Considerations:**
+
+The type of MDP determines how rewards should be structured:
+
+- **In finite-time MDPs**, rewards closer to the horizon \( T \) are more impactful. Therefore, if we want the agent to reach a **specific target state at the end**, we can place a **large terminal reward** at the goal and the agent will learn to aim for it precisely.
+
+- **In discounted MDPs**, earlier rewards matter more due to the compounding effect of the discount factor. To teach an agent to reach a goal that is far away, we must either:
+  - Increase the reward magnitude at the goal significantly to compensate for discounting.
+  - Design **dense intermediate rewards** to guide the agent toward the goal incrementally.
+
 
 ## c) 
 Define and demonstrate the following effects by constructing ”extreme“ MDPs that maximize their visibility, supporting your explanations with appropriate graphs:
@@ -75,49 +76,110 @@ Here the extreme MDP would be a long hallway GridWorld (e.g. 1×8). This allows 
 
 
 ### Robust Reinforcement Learning
-The idea that the learned policy should still perform well even if environment dynamics change slightly. For that, we add some wind and slippery floor. 
+Robust Reinforcement Learning aims to train agents that perform reliably even under perturbations or slight mismatches between training and deployment environments.
 
-The experiment setting for this would be to train and evaluate policies under:
-- Environment A (no wind)
-- Environment B (with wind)
-- Plot average episode reward or goal reach rate.
+In our initial experiment, we trained a Q-learning agent in a clean environment (Env A) and evaluated it in a perturbed version (Env B) with wind and slippery floors. While performance in Env A was perfect (reward ≈ +7.3), in Env B, rewards were volatile and significantly lower, revealing the lack of robustness in the trained policy.
+
+<img src="images/robustness.png" width="500"/>
+
+This result illustrates a key challenge: training in clean environments doesn't prepare agents for real-world uncertainty.
+
+To make the policy robust to dynamics changes, we can:
+- Train under stochasticity: Add wind and slip during training, so the agent learns to expect perturbations.
+- Use safety penalties: Add large negative rewards for dangerous states, discouraging risky paths.
+- Risk-sensitive RL: Train with objective functions that penalize high-variance or tail-risk outcomes.
+
+
+
 
 ### Overestimation bias
-<img src="images/overestimation_bias.png" alt="Bias" width="600"/>
+To illustrate overestimation bias, we designed an environment with two actions: one safe and one risky. The risky action has high reward variance, occasionally yielding large positive rewards, but often low or negative ones.
+
+We trained both Q-learning and Double Q-learning and plotted the Q-value estimates over time:
+
+<img src="images/overestimation_bias.png" alt="Overestimation Bias in Q-learning vs Double Q-learning" width="600"/>
+
+From the graph, we observe:
+
+Q-learning (solid lines) significantly overestimates the Q-value of the risky action (red), with wild fluctuations and upward drift.
+
+In contrast, Double Q-learning (dashed lines) produces much more conservative and stable estimates for the same action.
+
+For the safe action (blue), both methods converge more reliably, but Q-learning still slightly overestimates compared to Double Q.
+
+This confirms the known bias in Q-learning: because it uses max_a Q(s', a) to bootstrap updates, it favors high-variance actions, even if their expected return is worse. Double Q-learning avoids this by decoupling action selection and evaluation, reducing the impact of spurious high estimates.
 
 
 ## d) Influence of Stepsize (α) and Exploration (ε) Parameters on Q-Learning
-We conducted systematic experiments to understand how the choice of learning rate (α) and exploration rate (ε) affects the convergence and performance of Q-Learning.
+
+This section investigates how the **learning rate (α)** and **exploration parameter (ε)** affect the learning stability and performance of Q-learning. We evaluate different configurations by comparing:
+
+- Average episodic rewards (revealing short-term behavior)
+- Convergence of TD errors (revealing learning stability)
+
+---
 
 ### Effect of Learning Rate α
-<p float="left"> <img src="images/alphas.png" alt="alphas" width="400"/> </p>
-We tested different learning rates. Results show that:
 
-Lower learning rates (e.g., α = 0.01) achieve better cumulative rewards over time.
+<p float="left">
+  <img src="images/alphas.png" alt="alphas" width="400"/>
+</p>
 
-Larger learning rates lead to more volatile learning and may prevent convergence because Q-updates overshoot the correct value estimates.
+We tested various values of the learning rate α. A smaller α (e.g., **0.01**) results in higher and more stable performance, while larger values cause the agent to overshoot good Q-values, leading to instability and lower rewards.
 
-Thus, a smaller α promotes stable convergence by making gradual updates to Q-values.
+<p float="left">
+  <img src="images/avg_reward_alpha.png" alt="Average Reward vs Alpha" width="500"/>
+</p>
 
-### Effect of Initial Exploration Rate ε
-<p float="left"> <img src="images/epsilon_effect.png" alt="epsilon effect" width="400"/> </p>
-We also evaluated different initial exploration rates. Key observations:
+**Observation**:  
+- **Low α** → smoother and higher reward curves  
+- **High α** → unstable and less reliable learning
 
-Lower starting ε (e.g., ε₀ = 0.05) yields better final cumulative rewards.
+**Conclusion**:  
+A small α promotes stable convergence by limiting drastic Q-value updates, which is especially useful in stochastic environments.
 
-High ε promotes early exploration but risks excessive randomness, slowing policy improvement.
+---
 
-A moderate initial exploration followed by gradual decay leads to better exploitation of learned policies.
+### Effect of Initial Exploration Rate ε₀
 
-### Convergence Behavior with Tuned Parameters
-<p float="left"> <img src="images/tuned_params.png" alt="Convergence with Tuned Hyperparameters" width="400"/> </p>
-With tuned hyperparameters (α = 0.01, ε₀ = 0.05), we observed excellent convergence:
+<p float="left">
+  <img src="images/epsilon_effect.png" alt="epsilon effect" width="400"/>
+</p>
 
-TD error reduces smoothly and exponentially over episodes.
+We experimented with different initial ε values, controlling how much the agent explores at the start. An exponentially decaying schedule is used:
+$\varepsilon_t = \max(0.01, \varepsilon_0 \cdot e^{-kt})$
 
-Occasional small spikes occur due to stochastic transitions but are quickly corrected.
 
-The plot (log scale) shows convergence below 10⁻⁶, indicating very high precision.
+
+<p float="left">
+  <img src="images/avg_reward_epsilon.png" alt="Average Reward vs Epsilon" width="500"/>
+</p>
+
+**Observation**:  
+- **Lower ε₀ = 0.05** → quicker and better convergence  
+- **Higher ε₀** → more exploration early on, but slower exploitation
+
+**Conclusion**:  
+Start with moderate exploration (ε₀ ≈ 0.3) and decay it over time to **balance exploration and exploitation**. Too much early exploration can delay learning progress.
+
+---
+
+### Convergence Behavior with Tuned Hyperparameters
+
+With α = 0.01 and ε₀ = 0.05, Q-learning converges smoothly:
+
+<p float="left">
+  <img src="images/tuned_params.png" alt="Convergence with Tuned Hyperparameters" width="500"/>
+</p>
+
+**Observation**:
+- The TD error decreases **exponentially**
+- Occasional small spikes occur due to stochastic transitions
+- Final errors reach below 10⁻⁶, confirming convergence
+
+---
+
+
 
 
 ## e) Comparison of Actor-Critic and Q-Learning

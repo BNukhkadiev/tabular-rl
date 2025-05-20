@@ -3,69 +3,56 @@ import matplotlib.pyplot as plt
 from gridworld.env import GridWorld
 from algorithms.q_learning import q_learning
 
-def evaluate_policy(env, policy, episodes=100, max_steps=100):
-    rewards = []
-    successes = 0
-    for _ in range(episodes):
-        s = env.start
-        total_reward = 0
-        for _ in range(max_steps):
-            if env.is_terminal(s):
-                break
-            a = policy[s]
-            s, r = env.step(s, a)
-            total_reward += r
-        rewards.append(total_reward)
-        if s == env.goal:
-            successes += 1
-    return np.mean(rewards), successes / episodes
+def run_robustness_experiment(episodes=2000, alpha=0.1, epsilon=0.1):
+    # Environment A: no wind or slip
+    env_a = GridWorld(wind=None, slip_prob=0.0)
 
+    # Environment B: wind and slippery surface
+    wind = {
+        (2, 1): (0, 1),
+        (3, 2): (0, -1),
+        (1, 0): (1, 0)
+    }
+    env_b = GridWorld(wind=wind, slip_prob=0.2)
 
-def run_experiment():
-    shape = (4, 4)
-    goal = (3, 3)
-    start = (0, 0)
-    
-    # Env A: no wind
-    env_a = GridWorld(shape=shape, goal=goal, start=start, wind=None)
+    # Train Q-learning on env A
+    Q, policy, _, _ = q_learning(env_a, alpha=alpha, epsilon=epsilon, episodes=episodes)
 
-    # Env B: wind on left side pushes up
-    wind = {(r, 0): (-1, 0) for r in range(1, 4)}  # vertical wind pushing up in first column
-    wind = None 
-    
-    env_b = GridWorld(shape=shape, goal=goal, start=start, wind=wind)
+    def evaluate(env, policy, episodes=100, max_steps=100):
+        rewards = []
+        for _ in range(episodes):
+            s = env.start
+            total_reward = 0
+            for _ in range(max_steps):
+                if env.is_terminal(s):
+                    break
+                a = policy[s]
+                s, r = env.step(s, a)
+                total_reward += r
+            rewards.append(total_reward)
+        return rewards
 
-    # Train Q-learning on Env A
-    Q, policy, _, _ = q_learning(env_a, alpha=0.1, epsilon=0.1, episodes=5000)
+    rewards_a = evaluate(env_a, policy)
+    rewards_b = evaluate(env_b, policy)
 
-    # Evaluate policy in both environments
-    mean_reward_a, success_rate_a = evaluate_policy(env_a, policy)
-    mean_reward_b, success_rate_b = evaluate_policy(env_b, policy)
+    return rewards_a, rewards_b
 
-    # Print results
-    print("Trained on Env A (No Wind)")
-    print(f"→ Avg Reward (Env A): {mean_reward_a:.2f}, Success Rate: {success_rate_a:.2%}")
-    print(f"→ Avg Reward (Env B): {mean_reward_b:.2f}, Success Rate: {success_rate_b:.2%}")
+def plot_results(rewards_a, rewards_b):
+    plt.figure(figsize=(8, 5))
+    window = 10
+    smoothed_a = np.convolve(rewards_a, np.ones(window)/window, mode='valid')
+    smoothed_b = np.convolve(rewards_b, np.ones(window)/window, mode='valid')
 
-    # Plot
-    labels = ['Env A (No Wind)', 'Env B (Wind)']
-    rewards = [mean_reward_a, mean_reward_b]
-    success = [success_rate_a, success_rate_b]
-
-    fig, ax = plt.subplots(1, 2, figsize=(10, 4))
-    
-    ax[0].bar(labels, rewards, color=['skyblue', 'salmon'])
-    ax[0].set_title('Average Reward per Episode')
-    ax[0].set_ylabel('Reward')
-    
-    ax[1].bar(labels, success, color=['skyblue', 'salmon'])
-    ax[1].set_title('Goal Reach Rate')
-    ax[1].set_ylabel('Rate')
-    
-    plt.suptitle("Policy Robustness Under Environmental Shift (Wind)")
+    plt.plot(smoothed_a, label="Env A (No Wind)")
+    plt.plot(smoothed_b, label="Env B (Wind + Slippery Floor)")
+    plt.title("Robustness of Policy: Evaluation Across Environments")
+    plt.xlabel("Episode")
+    plt.ylabel("Smoothed Episode Reward")
+    plt.legend()
+    plt.grid(True)
     plt.tight_layout()
     plt.show()
 
-
 if __name__ == "__main__":
-    run_experiment()
+    rewards_a, rewards_b = run_robustness_experiment()
+    plot_results(rewards_a, rewards_b)
